@@ -13,7 +13,6 @@ UW GO is a side project made by Mohammed Rehan and Safwan Shiblee, a way for stu
 #### Important External Docs
 
 - [React](https://reactjs.org/)
-- [Apollo Client](https://www.apollographql.com/docs/react/)
 - [TypeScript](https://www.typescriptlang.org/index.html)
 
 ## Key Features
