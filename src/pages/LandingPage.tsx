@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 
+
 const LandingPage: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
