@@ -9,7 +9,8 @@ import {
   signOut,
   setPersistence,
   browserLocalPersistence,
-  browserSessionPersistence
+  browserSessionPersistence,
+  reload
 } from "firebase/auth";
 import { auth } from "../firebase";
 
@@ -21,6 +22,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   isEmailVerified: boolean;
   resendVerificationEmail: () => Promise<void>;
+  checkEmailVerification: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -32,7 +34,6 @@ export const useAuth = () => {
   }
   return context;
 };
-
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -70,19 +71,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isEmailVerified, setIsEmailVerified] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      setIsEmailVerified(user?.emailVerified || false);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        // Always reload user to get latest emailVerified status
+        await reload(user);
+        setCurrentUser(user);
+        setIsEmailVerified(user.emailVerified);
+      } else {
+        setCurrentUser(null);
+        setIsEmailVerified(false);
+      }
       setLoading(false);
     });
 
     return unsubscribe;
   }, []);
 
-  // Validate UWaterloo email
+  // Validate UWaterloo email - STRICT enforcement
   const validateUWEmail = (email: string): boolean => {
-    const uwEmailRegex = /^[a-zA-Z0-9._%+-]+@uwaterloo\.ca$/;
-    return uwEmailRegex.test(email);
+    const uwEmailRegex = /^[a-zA-Z0-9._%+-]+@uwaterloo\.ca$/i;
+    return uwEmailRegex.test(email.trim().toLowerCase());
   };
 
   // Validate password strength
@@ -108,9 +116,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       throw new Error("Too many signup attempts. Please try again later.");
     }
 
-    // Validate email domain
-    if (!validateUWEmail(email)) {
-      throw new Error("Only @uwaterloo.ca email addresses are allowed");
+    // Clean email input
+    const cleanEmail = email.trim().toLowerCase();
+
+    // STRICT: Validate UWaterloo email domain
+    if (!validateUWEmail(cleanEmail)) {
+      throw new Error("Only @uwaterloo.ca email addresses are allowed. Please use your UWaterloo email.");
     }
 
     // Validate password strength
@@ -121,26 +132,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     try {
       // Create user account
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
       
-      // Send verification email
+      // Send verification email with custom settings
       await sendEmailVerification(userCredential.user, {
-        url: window.location.origin, // Redirect back to app after verification
+        url: `${window.location.origin}/verify-email`, // Redirect to verify page after clicking email link
         handleCodeInApp: false
       });
 
-      // Sign out immediately after signup to enforce email verification
+      // IMPORTANT: Sign out immediately after signup to enforce email verification
       await signOut(auth);
       
-      rateLimiter.reset(`signup_${email}`);
+      rateLimiter.reset(`signup_${cleanEmail}`);
     } catch (error: any) {
       // Handle specific Firebase errors
       if (error.code === 'auth/email-already-in-use') {
-        throw new Error("This email is already registered. Please sign in instead.");
+        throw new Error("This UWaterloo email is already registered. Please sign in instead.");
       } else if (error.code === 'auth/weak-password') {
         throw new Error("Password is too weak. Please use a stronger password.");
       } else if (error.code === 'auth/invalid-email') {
-        throw new Error("Invalid email format.");
+        throw new Error("Invalid email format. Please use your @uwaterloo.ca email.");
       } else {
         throw new Error(error.message || "Failed to create account");
       }
@@ -149,13 +160,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (email: string, password: string, rememberMe: boolean) => {
     // Rate limiting
-    if (!rateLimiter.canAttempt(`login_${email}`)) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!rateLimiter.canAttempt(`login_${cleanEmail}`)) {
       throw new Error("Too many login attempts. Please try again later.");
     }
 
-    // Basic email validation
+    // Basic validation
     if (!email || !password) {
       throw new Error("Email and password are required");
+    }
+
+    // Validate UWaterloo email domain
+    if (!validateUWEmail(cleanEmail)) {
+      throw new Error("Only @uwaterloo.ca email addresses are allowed");
     }
 
     try {
@@ -163,31 +180,36 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
       
       // Sign in
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
       
-      // Check if email is verified
+      // Reload user to ensure we have the latest emailVerified status
+      await reload(userCredential.user);
+      
+      // STRICT: Check if email is verified
       if (!userCredential.user.emailVerified) {
         await signOut(auth);
         throw new Error("Please verify your email before logging in. Check your inbox for the verification link.");
       }
       
-      // Check if it's a UWaterloo email (extra security check)
+      // Double-check UWaterloo domain (security layer)
       if (!validateUWEmail(userCredential.user.email || "")) {
         await signOut(auth);
-        throw new Error("Access restricted to UWaterloo students only");
+        throw new Error("Access restricted to verified UWaterloo students only");
       }
       
-      rateLimiter.reset(`login_${email}`);
+      rateLimiter.reset(`login_${cleanEmail}`);
     } catch (error: any) {
       // Handle specific Firebase errors
       if (error.code === 'auth/user-not-found') {
-        throw new Error("No account found with this email. Please sign up first.");
+        throw new Error("No account found with this UWaterloo email. Please sign up first.");
       } else if (error.code === 'auth/wrong-password') {
         throw new Error("Incorrect password. Please try again.");
       } else if (error.code === 'auth/invalid-email') {
-        throw new Error("Invalid email format.");
+        throw new Error("Invalid email format. Please use your @uwaterloo.ca email.");
       } else if (error.code === 'auth/user-disabled') {
         throw new Error("This account has been disabled. Please contact support.");
+      } else if (error.code === 'auth/invalid-credential') {
+        throw new Error("Invalid credentials. Please check your email and password.");
       } else if (error.message) {
         throw error; // Re-throw our custom errors
       } else {
@@ -209,18 +231,38 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       throw new Error("No user logged in");
     }
     
-    // Rate limiting for resending emails
-    if (!rateLimiter.canAttempt(`resend_${currentUser.email}`, 3, 60 * 60 * 1000)) {
+    // Rate limiting for resending emails (stricter)
+    if (!rateLimiter.canAttempt(`resend_${currentUser.email}`, 2, 60 * 60 * 1000)) {
       throw new Error("Too many verification email requests. Please try again in an hour.");
     }
 
     try {
       await sendEmailVerification(currentUser, {
-        url: window.location.origin,
+        url: `${window.location.origin}/verify-email`,
         handleCodeInApp: false
       });
     } catch (error: any) {
+      if (error.code === 'auth/too-many-requests') {
+        throw new Error("Too many requests. Please wait before requesting another verification email.");
+      }
       throw new Error("Failed to send verification email. Please try again later.");
+    }
+  };
+
+  const checkEmailVerification = async (): Promise<boolean> => {
+    if (!currentUser) {
+      return false;
+    }
+
+    try {
+      // Reload user to get the latest email verification status
+      await reload(currentUser);
+      const isVerified = currentUser.emailVerified;
+      setIsEmailVerified(isVerified);
+      return isVerified;
+    } catch (error) {
+      console.error("Error checking email verification:", error);
+      return false;
     }
   };
 
@@ -231,7 +273,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     login,
     logout,
     isEmailVerified,
-    resendVerificationEmail
+    resendVerificationEmail,
+    checkEmailVerification
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
