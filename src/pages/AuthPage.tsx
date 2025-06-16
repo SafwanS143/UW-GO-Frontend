@@ -34,23 +34,6 @@ const AuthPage: React.FC = () => {
     return uwEmailRegex.test(email.trim().toLowerCase());
   };
 
-  const getPasswordStrength = (password: string) => {
-    let score = 0;
-    const checks = {
-      length: password.length >= 8,
-      lowercase: /[a-z]/.test(password),
-      uppercase: /[A-Z]/.test(password),
-      number: /\d/.test(password),
-      special: /[!@#$%^&*]/.test(password)
-    };
-
-    Object.values(checks).forEach(check => check && score++);
-    
-    if (score < 3) return { level: 'weak', color: 'red' };
-    if (score < 4) return { level: 'medium', color: 'yellow' };
-    return { level: 'strong', color: 'green' };
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -68,6 +51,12 @@ const AuthPage: React.FC = () => {
     // Validate UWaterloo email
     if (!validateUWEmail(cleanEmail)) {
       setError('Please use your @uwaterloo.ca email address');
+      return;
+    }
+
+    // Simple password length check
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long');
       return;
     }
 
@@ -117,8 +106,6 @@ const AuthPage: React.FC = () => {
     setConfirmPassword('');
     setShowPassword(false);
   };
-
-  const passwordStrength = isSignUp ? getPasswordStrength(password) : null;
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -190,7 +177,7 @@ const AuthPage: React.FC = () => {
                   id="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder={isSignUp ? "Create a strong password" : "Enter your password"}
+                  placeholder={isSignUp ? "At least 6 characters" : "Enter your password"}
                   disabled={loading}
                   className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
                   required
@@ -211,24 +198,10 @@ const AuthPage: React.FC = () => {
                 </button>
               </div>
               
-              {isSignUp && password && passwordStrength && (
-                <div className="mt-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-600">Password strength:</span>
-                    <span className={`font-medium text-${passwordStrength.color}-600`}>
-                      {passwordStrength.level}
-                    </span>
-                  </div>
-                  <div className="mt-1 w-full bg-gray-200 rounded-full h-1">
-                    <div 
-                      className={`h-1 rounded-full bg-${passwordStrength.color}-500 transition-all duration-300`}
-                      style={{ 
-                        width: passwordStrength.level === 'weak' ? '33%' : 
-                               passwordStrength.level === 'medium' ? '66%' : '100%'
-                      }}
-                    />
-                  </div>
-                </div>
+              {isSignUp && password && password.length < 6 && (
+                <p className="mt-1 text-sm text-red-600">
+                  Password must be at least 6 characters long
+                </p>
               )}
             </div>
 
@@ -302,40 +275,6 @@ const AuthPage: React.FC = () => {
               </button>
             </p>
           </div>
-
-          {isSignUp && (
-            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
-              <h3 className="text-sm font-medium text-blue-800 mb-2">
-                Password Requirements:
-              </h3>
-              <ul className="text-sm text-blue-700 space-y-1">
-                <li className="flex items-center">
-                  <svg className={`h-4 w-4 mr-2 ${password.length >= 8 ? 'text-green-500' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  At least 8 characters long
-                </li>
-                <li className="flex items-center">
-                  <svg className={`h-4 w-4 mr-2 ${/[a-z]/.test(password) ? 'text-green-500' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  At least one lowercase letter
-                </li>
-                <li className="flex items-center">
-                  <svg className={`h-4 w-4 mr-2 ${/[A-Z]/.test(password) ? 'text-green-500' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  At least one uppercase letter
-                </li>
-                <li className="flex items-center">
-                  <svg className={`h-4 w-4 mr-2 ${/\d/.test(password) ? 'text-green-500' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  At least one number
-                </li>
-              </ul>
-            </div>
-          )}
 
           <div className="mt-4 text-center">
             <p className="text-xs text-gray-500">

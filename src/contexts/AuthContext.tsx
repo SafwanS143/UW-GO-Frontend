@@ -93,19 +93,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return uwEmailRegex.test(email.trim().toLowerCase());
   };
 
-  // Validate password strength
+  // Simplified password validation - just check length
   const validatePassword = (password: string): { valid: boolean; message: string } => {
-    if (password.length < 8) {
-      return { valid: false, message: "Password must be at least 8 characters long" };
-    }
-    if (!/(?=.*[a-z])/.test(password)) {
-      return { valid: false, message: "Password must contain at least one lowercase letter" };
-    }
-    if (!/(?=.*[A-Z])/.test(password)) {
-      return { valid: false, message: "Password must contain at least one uppercase letter" };
-    }
-    if (!/(?=.*\d)/.test(password)) {
-      return { valid: false, message: "Password must contain at least one number" };
+    if (password.length < 6) {
+      return { valid: false, message: "Password must be at least 6 characters long" };
     }
     return { valid: true, message: "" };
   };
@@ -124,7 +115,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       throw new Error("Only @uwaterloo.ca email addresses are allowed. Please use your UWaterloo email.");
     }
 
-    // Validate password strength
+    // Validate password length
     const passwordValidation = validatePassword(password);
     if (!passwordValidation.valid) {
       throw new Error(passwordValidation.message);
