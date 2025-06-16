@@ -6,7 +6,6 @@ import {
   where, 
   orderBy, 
   serverTimestamp,
-  Timestamp,
   deleteDoc,
   doc
 } from 'firebase/firestore';
@@ -119,7 +118,7 @@ class RideService {
     }
   }
 
-  async deleteRide(rideId: string, uid: string): Promise<void> {
+  async deleteRide(rideId: string): Promise<void> {
     try {
       // Note: In a production app, you'd want to verify ownership in Firestore security rules
       await deleteDoc(doc(db, this.COLLECTION_NAME, rideId));
